@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, FlatList, Platform, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, FlatList, Platform, Alert, Modal } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { listGigs, addGig, deleteGig } from "../../db/gigs";
 
@@ -7,7 +7,13 @@ export default function Gigs() {
     const navigation = useNavigation();
     const [gigs, setGigs] = useState([]);
     const [title, setTitle] = useState("");
-    const [date, setDate] = useState("");
+    // date selectors: day, month (1-12), year
+    const [day, setDay] = useState(null);
+    const [month, setMonth] = useState(null);
+    const [year, setYear] = useState(null);
+    const [showDayModal, setShowDayModal] = useState(false);
+    const [showMonthModal, setShowMonthModal] = useState(false);
+    const [showYearModal, setShowYearModal] = useState(false);
     const [venue, setVenue] = useState("");
     const [city, setCity] = useState("");
     const [busy, setBusy] = useState(false);
@@ -47,17 +53,39 @@ export default function Gigs() {
             Alert.alert("Error", "Title is required");
             return;
         }
+        // If a full date is selected, build an ISO-like YYYY-MM-DD string
+        let dateStr = "";
+            if (day !== null && month !== null && year !== null) {
+            const selected = new Date(year, month - 1, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            selected.setHours(0, 0, 0, 0);
+                // Check the constructed date matches inputs (catches invalid combos like Feb 31)
+                if (selected.getFullYear() !== year || selected.getMonth() !== (month - 1) || selected.getDate() !== day) {
+                    Alert.alert("Error", "Invalid date for the selected month/year. Please choose a valid date.");
+                    return;
+                }
+                if (selected < today) {
+                Alert.alert("Error", "Date cannot be in the past. Please select today or a future date.");
+                return;
+            }
+            const mm = String(month).padStart(2, "0");
+            const dd = String(day).padStart(2, "0");
+            dateStr = `${year}-${mm}-${dd}`;
+        }
 
         try {
             setBusy(true);
             await addGig({
                 title: title.trim(),
-                date: date.trim(),
+                date: dateStr,
                 venue: venue.trim(),
                 city: city.trim(),
             });
             setTitle("");
-            setDate("");
+            setDay(null);
+            setMonth(null);
+            setYear(null);
             setVenue("");
             setCity("");
             await refreshGigs();
@@ -99,7 +127,7 @@ export default function Gigs() {
             <View style={styles.container}>
                 <Text style={styles.title}>Gigs</Text>
                 <Text style={styles.subtitle}>Manage your upcoming shows</Text>
-                
+
                 <View style={styles.placeholderBox}>
                     <Text style={styles.placeholderText}>💻</Text>
                     <Text style={styles.placeholderTitle}>Web Platform</Text>
@@ -120,7 +148,7 @@ export default function Gigs() {
             {/* Add Gig Form */}
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Add New Gig</Text>
-                
+
                 <TextInput
                     placeholder="Title *"
                     placeholderTextColor="#999"
@@ -128,13 +156,90 @@ export default function Gigs() {
                     onChangeText={setTitle}
                     style={styles.input}
                 />
-                <TextInput
-                    placeholder="Date (e.g., 2025-11-15 19:00)"
-                    placeholderTextColor="#999"
-                    value={date}
-                    onChangeText={setDate}
-                    style={styles.input}
-                />
+                {/* Date selectors: Day / Month / Year */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <TouchableOpacity style={styles.selector} onPress={() => setShowDayModal(true)}>
+                        <Text style={styles.selectorText}>{day ? String(day).padStart(2, '0') : 'Day'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.selector} onPress={() => setShowMonthModal(true)}>
+                        <Text style={styles.selectorText}>{month ? String(month).padStart(2, '0') : 'Month'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.selector} onPress={() => setShowYearModal(true)}>
+                        <Text style={styles.selectorText}>{year ? String(year) : 'Year'}</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Day selector modal */}
+                <Modal visible={showDayModal} transparent animationType="slide">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Day</Text>
+                            <FlatList
+                                data={Array.from({ length: 31 }, (_, i) => i + 1)}
+                                keyExtractor={(n) => String(n)}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.modalItem}
+                                        onPress={() => { setDay(item); setShowDayModal(false); }}
+                                    >
+                                        <Text style={styles.modalItemText}>{String(item).padStart(2, '0')}</Text>
+                                    </TouchableOpacity>
+                                )}
+                            />
+                            <TouchableOpacity onPress={() => setShowDayModal(false)} style={styles.modalClose}>
+                                <Text style={styles.modalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Month selector modal */}
+                <Modal visible={showMonthModal} transparent animationType="slide">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Month</Text>
+                            <FlatList
+                                data={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
+                                keyExtractor={(n) => String(n)}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.modalItem}
+                                        onPress={() => { setMonth(item); setShowMonthModal(false); }}
+                                    >
+                                        <Text style={styles.modalItemText}>{String(item).padStart(2, '0')}</Text>
+                                    </TouchableOpacity>
+                                )}
+                            />
+                            <TouchableOpacity onPress={() => setShowMonthModal(false)} style={styles.modalClose}>
+                                <Text style={styles.modalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Year selector modal */}
+                <Modal visible={showYearModal} transparent animationType="slide">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Year</Text>
+                            <FlatList
+                                data={Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + i)}
+                                keyExtractor={(n) => String(n)}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.modalItem}
+                                        onPress={() => { setYear(item); setShowYearModal(false); }}
+                                    >
+                                        <Text style={styles.modalItemText}>{String(item)}</Text>
+                                    </TouchableOpacity>
+                                )}
+                            />
+                            <TouchableOpacity onPress={() => setShowYearModal(false)} style={styles.modalClose}>
+                                <Text style={styles.modalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
                 <TextInput
                     placeholder="Venue"
                     placeholderTextColor="#999"
@@ -149,7 +254,7 @@ export default function Gigs() {
                     onChangeText={setCity}
                     style={styles.input}
                 />
-                
+
                 <TouchableOpacity
                     style={[styles.submitButton, busy && styles.buttonDisabled]}
                     onPress={onAddGig}
@@ -246,6 +351,22 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: "#1a1a1a",
     },
+    selector: {
+        flex: 1,
+        backgroundColor: "#fafafa",
+        borderColor: "#ddd",
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        marginRight: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    selectorText: {
+        fontSize: 16,
+        color: '#1a1a1a',
+    },
     submitButton: {
         backgroundColor: "#007AFF",
         borderRadius: 8,
@@ -336,6 +457,43 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#666",
         textAlign: "center",
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        maxHeight: '80%',
+        padding: 12,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    modalItem: {
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderBottomColor: '#eee',
+        borderBottomWidth: 1,
+    },
+    modalItemText: {
+        fontSize: 16,
+        color: '#1a1a1a',
+    },
+    modalClose: {
+        marginTop: 8,
+        padding: 12,
+        alignItems: 'center',
+    },
+    modalCloseText: {
+        color: '#007AFF',
+        fontSize: 16,
     },
     logoutButton: {
         backgroundColor: "#ff3b30",
